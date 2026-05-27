@@ -1,0 +1,258 @@
+/* ── Drop zone ── */
+.drop-zone {
+  position: relative;
+  border: 2px dashed rgba(44, 198, 169, 0.35);
+  border-radius: 12px;
+  background: rgba(44, 198, 169, 0.05);
+  padding: 28px 16px 22px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(44, 198, 169, 0.12);
+}
+
+.drop-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.drop-icon {
+  font-size: 1.8rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.drop-text {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+
+.drop-sub {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.chosen-file {
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+.load-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.assignment-controls {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.builder-file-picker {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ── Component info panel ── */
+.muted-hint {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.info-row:last-of-type {
+  border-bottom: none;
+}
+
+.info-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.info-value {
+  color: var(--text);
+  text-align: right;
+  max-width: 60%;
+  word-break: break-all;
+}
+
+.info-mono {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.section-sub {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 12px 0 6px;
+}
+
+.dim-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.dim-cell {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px 8px;
+  font-size: 0.83rem;
+  text-align: center;
+}
+
+.dim-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+/* ── Legend ── */
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Viewer header ── */
+.viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-label {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Search ── */
+.search-input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-1);
+  padding: 26px 28px 22px;
+  max-width: 340px;
+  width: 90%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.modal-title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  color: var(--danger);
+}
+
+.modal-message {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0 0 20px;
+  line-height: 1.55;
+}
+
+.modal-close-btn {
+  width: 100%;
+}
+
+/* ── Status pushed to bottom ── */
+.status-card {
+  margin-top: auto;
+}
