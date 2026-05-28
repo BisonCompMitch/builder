@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BisonBuilder</title>
+    <link rel="stylesheet" href="static/styles.css" />
+    <link rel="stylesheet" href="static/builder.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="left-panel">
+        <div class="brand">
+          <h1>BisonBuilder</h1>
+          <p>Interactive 3D model viewer for construction layout and component-level field review.</p>
+        </div>
+
+        <section id="projectCard" class="card hidden">
+          <h2>Project Model</h2>
+          <select id="projectSelect" class="search-input"></select>
+          <div id="assignedModelLabel" class="muted-hint">No Builder model assigned.</div>
+          <div id="assignControls" class="assignment-controls hidden">
+            <input id="assignedFileInput" type="file" accept=".ifc" class="builder-file-picker" />
+            <button id="assignedUploadBtn" class="btn btn-primary load-btn">Upload & Assign IFC</button>
+            <button id="clearAssignedBtn" class="btn btn-secondary load-btn">Clear Assignment</button>
+          </div>
+        </section>
+
+        <section id="uploadCard" class="card">
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-icon">&uarr;</div>
+            <div class="drop-text">Drop .ifc file here</div>
+            <div class="drop-sub">or click to browse</div>
+            <input id="fileInput" type="file" accept=".ifc" class="drop-input" />
+          </div>
+          <div id="chosenFile" class="chosen-file hidden"></div>
+          <button id="loadBtn" class="btn btn-primary load-btn">Load IFC</button>
+        </section>
+
+        <section class="card">
+          <h2>Search Panel</h2>
+          <input id="searchInput" class="search-input" type="text" placeholder="Enter panel name and press Enter" />
+        </section>
+
+        <section class="card">
+          <h2>Export</h2>
+          <input id="jobNameInput" class="search-input" type="text" placeholder="Job name (optional)" />
+          <button id="exportBtn" class="btn btn-primary load-btn">Export PDF</button>
+        </section>
+
+        <section class="card">
+          <h2>Panel / Assembly</h2>
+          <div id="noSelection" class="muted-hint">
+            Click any component in the 3D view to inspect it.
+          </div>
+          <div id="componentInfo" class="hidden">
+            <div class="info-row">
+              <span class="info-label">Name</span>
+              <span id="compName" class="info-value">&mdash;</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Category</span>
+              <span id="compBucket" class="info-value">&mdash;</span>
+            </div>
+            <div class="section-sub">Overall Dimensions (in)</div>
+            <div class="dim-grid">
+              <div class="dim-cell">
+                <span class="dim-label">Width</span>
+                <span id="compW">&mdash;</span>
+              </div>
+              <div class="dim-cell">
+                <span class="dim-label">Depth</span>
+                <span id="compD">&mdash;</span>
+              </div>
+              <div class="dim-cell">
+                <span class="dim-label">Height</span>
+                <span id="compH">&mdash;</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="statusCard" class="card status-card">
+          <h2>Status</h2>
+          <div id="statusText">Load an IFC file to begin.</div>
+        </section>
+      </aside>
+
+      <main class="viewer-panel">
+        <div class="viewer-header">
+          <span id="fileLabel">No model loaded</span>
+          <span id="statsLabel" class="stats-label"></span>
+        </div>
+        <div id="viewerContainer"></div>
+      </main>
+    </div>
+
+    <div id="modalOverlay" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 class="modal-title">Panel Not Found</h3>
+        <p id="modalMessage" class="modal-message"></p>
+        <button id="modalClose" class="btn btn-primary modal-close-btn">Try Again</button>
+      </div>
+    </div>
+
+    <script type="module" src="static/builder.js"></script>
+  </body>
+</html>
