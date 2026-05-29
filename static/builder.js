@@ -47,6 +47,7 @@ let builderContext = null;
 let loadedAssignedProjectId = null;
 let loadedUploadFile = null;
 let parentAccessToken = "";
+let parentCanUpload = null;
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -92,7 +93,11 @@ function handleAuthMessage(event) {
     return;
   }
   const nextToken = String(data.accessToken || "").trim();
+  if (typeof data.canUpload === "boolean") {
+    parentCanUpload = data.canUpload;
+  }
   if (nextToken === parentAccessToken) {
+    renderProjectContext();
     return;
   }
   parentAccessToken = nextToken;
@@ -499,7 +504,9 @@ async function loadModel() {
 function renderProjectContext(preferredProjectId = "") {
   if (!builderContext) return;
   const projects = builderContext.projects || [];
-  if (uploadCard) uploadCard.classList.toggle("hidden", !builderContext.can_upload);
+  const showUploadCard =
+    parentCanUpload === null ? !!builderContext.can_upload : !!parentCanUpload;
+  if (uploadCard) uploadCard.classList.toggle("hidden", !showUploadCard);
   if (projectCard) projectCard.classList.toggle("hidden", !projects.length && !builderContext.can_assign);
   if (assignControls) assignControls.classList.toggle("hidden", !builderContext.can_assign);
   if (!projectSelect) return;
@@ -522,7 +529,11 @@ function renderProjectContext(preferredProjectId = "") {
     assignedModelLabel.textContent = builderContext.can_assign
       ? "Select a project to assign a Builder model."
       : "No Builder model assigned yet.";
-    setStatus("No Builder model is assigned to this account.", true);
+    if (showUploadCard) {
+      setStatus("Drop or choose an IFC file to load a model.");
+    } else {
+      setStatus("No Builder model is assigned to this account.", true);
+    }
     return;
   }
 
