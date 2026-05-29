@@ -114,7 +114,11 @@ function builderApiBase() {
   }
 
   const host = window.location.hostname.toLowerCase();
-  if (host === "builder.scottsdaleutah.com" || host.endsWith(".github.io")) {
+  if (
+    host === "builder.scottsdaleutah.com" ||
+    host === "pipeline.scottsdaleutah.com" ||
+    host.endsWith(".github.io")
+  ) {
     return "https://api.scottsdaleutah.com";
   }
 
