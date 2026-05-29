@@ -46,6 +46,7 @@ let selectedPanelId = null;
 let builderContext = null;
 let loadedAssignedProjectId = null;
 let loadedUploadFile = null;
+let parentAccessToken = "";
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -59,6 +60,9 @@ const HIGHLIGHT_EMISSIVE = 0xffffff;
 const HIGHLIGHT_INTENSITY = 0.22;
 
 function getAccessToken() {
+  if (parentAccessToken) {
+    return parentAccessToken;
+  }
   try {
     return sessionStorage.getItem("bw_token") || localStorage.getItem("bw_token") || "";
   } catch (_error) {
@@ -66,8 +70,59 @@ function getAccessToken() {
   }
 }
 
+function isTrustedAuthOrigin(origin) {
+  const trusted = new Set([
+    window.location.origin,
+    "https://pipeline.scottsdaleutah.com",
+    "https://www.pipeline.scottsdaleutah.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+  ]);
+  return trusted.has(origin);
+}
+
+function handleAuthMessage(event) {
+  if (!isTrustedAuthOrigin(event.origin)) {
+    return;
+  }
+  const data = event.data || {};
+  if (data.type !== "bisonworks-builder-auth") {
+    return;
+  }
+  const nextToken = String(data.accessToken || "").trim();
+  if (nextToken === parentAccessToken) {
+    return;
+  }
+  parentAccessToken = nextToken;
+  if (parentAccessToken) {
+    loadBuilderContext();
+  }
+}
+
+function notifyParentReady() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "bisonbuilder-ready" }, "*");
+  }
+}
+
+function builderApiBase() {
+  const explicitBase = String(window.BISON_BUILDER_API_BASE || "").trim();
+  if (explicitBase) {
+    return explicitBase.replace(/\/+$/, "");
+  }
+
+  const host = window.location.hostname.toLowerCase();
+  if (host === "builder.scottsdaleutah.com" || host.endsWith(".github.io")) {
+    return "https://api.scottsdaleutah.com";
+  }
+
+  return "";
+}
+
 function builderApiPath(path) {
-  return `/api${path}`;
+  return `${builderApiBase()}/api${path}`;
 }
 
 function authHeaders(extra = {}) {
@@ -700,7 +755,9 @@ exportBtn.addEventListener("click", exportPdf);
 projectSelect?.addEventListener("change", () => loadAssignedProjectModel(projectSelect.value));
 assignedUploadBtn?.addEventListener("click", uploadAssignedModel);
 clearAssignedBtn?.addEventListener("click", clearAssignedModel);
+window.addEventListener("message", handleAuthMessage);
 window.addEventListener("resize", onResize);
 
 initViewer();
+notifyParentReady();
 loadBuilderContext();
