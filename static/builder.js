@@ -32,6 +32,7 @@ const assignedFileInput = document.getElementById("assignedFileInput");
 const assignedUploadBtn = document.getElementById("assignedUploadBtn");
 const clearAssignedBtn = document.getElementById("clearAssignedBtn");
 const uploadCard = document.getElementById("uploadCard");
+const BUILDER_ASSIGNMENT_EVENT = "bisonworks-builder-assignment-updated";
 
 let scene;
 let camera;
@@ -141,18 +142,22 @@ function handleAuthMessage(event) {
     return;
   }
   const data = event.data || {};
+  if (data.type === BUILDER_ASSIGNMENT_EVENT) {
+    loadBuilderContext(String(data.projectId || "").trim());
+    return;
+  }
   if (data.type !== "bisonworks-builder-auth") {
     return;
   }
   const nextToken = String(data.accessToken || "").trim();
   parentCapabilities = capabilitiesFromAuthMessage(data);
   if (nextToken === parentAccessToken) {
-    renderProjectContext();
+    renderProjectContext(projectSelect?.value || loadedAssignedProjectId || "");
     return;
   }
   parentAccessToken = nextToken;
   if (parentAccessToken) {
-    loadBuilderContext();
+    loadBuilderContext(String(data.projectId || "").trim());
   }
 }
 
@@ -612,15 +617,21 @@ function renderProjectContext(preferredProjectId = "") {
     : "No Builder model assigned.";
 }
 
-async function loadBuilderContext() {
+async function loadBuilderContext(preferredProjectId = "") {
   try {
     const response = await builderFetch("/builder/context");
     builderContext = await parseJsonResponse(response, "Unable to load Builder context.");
-    renderProjectContext();
+    renderProjectContext(preferredProjectId);
     const capabilities = getEffectiveCapabilities();
     const selected = getSelectedProject();
     if (selected?.has_builder_model) {
       await loadAssignedProjectModel(selected.id);
+    } else if (selected?.id && loadedAssignedProjectId === selected.id) {
+      clearModel();
+      loadedAssignedProjectId = null;
+      fileLabel.textContent = "No model assigned";
+      statsLabel.textContent = "";
+      setStatus("No Builder model is assigned to this project.", true);
     } else if (capabilities.assignedOnly || !capabilities.canUpload) {
       clearModel();
       fileLabel.textContent = "No model assigned";
