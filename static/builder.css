@@ -73,6 +73,25 @@
   font-size: 0.82rem;
 }
 
+.project-name-label {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.35;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+
+.project-name-label.hidden {
+  display: none;
+}
+
 /* ── Component info panel ── */
 .muted-hint {
   color: var(--muted);

@@ -25,6 +25,7 @@ const compH = document.getElementById("compH");
 const statusCard = document.getElementById("statusCard");
 const projectCard = document.getElementById("projectCard");
 const projectSelect = document.getElementById("projectSelect");
+const projectNameLabel = document.getElementById("projectNameLabel");
 const assignedModelLabel = document.getElementById("assignedModelLabel");
 const assignControls = document.getElementById("assignControls");
 const assignedFileInput = document.getElementById("assignedFileInput");
@@ -574,6 +575,8 @@ function renderProjectContext(preferredProjectId = "") {
   if (clearAssignedBtn) clearAssignedBtn.classList.toggle("hidden", !capabilities.canClearAssignment);
   if (!projectSelect) return;
 
+  if (projectNameLabel) projectNameLabel.classList.toggle("hidden", !capabilities.assignedOnly);
+  projectSelect.classList.toggle("hidden", capabilities.assignedOnly);
   projectSelect.disabled = !capabilities.canUseProjectSelector;
   projectSelect.innerHTML = "";
   for (const project of projects) {
@@ -590,6 +593,7 @@ function renderProjectContext(preferredProjectId = "") {
     null;
 
   if (!selected) {
+    if (projectNameLabel) projectNameLabel.textContent = "No project assigned.";
     assignedModelLabel.textContent = capabilities.canAssign
       ? "Select a project to assign a Builder model."
       : "No Builder model assigned yet.";
@@ -602,6 +606,7 @@ function renderProjectContext(preferredProjectId = "") {
   }
 
   projectSelect.value = selected.id;
+  if (projectNameLabel) projectNameLabel.textContent = projectLabel(selected);
   assignedModelLabel.textContent = selected.has_builder_model
     ? `Assigned: ${selected.builder_file_name}`
     : "No Builder model assigned.";
