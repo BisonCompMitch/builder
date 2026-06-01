@@ -47,7 +47,7 @@ let builderContext = null;
 let loadedAssignedProjectId = null;
 let loadedUploadFile = null;
 let parentAccessToken = "";
-let parentCanUpload = null;
+let parentCapabilities = null;
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -69,6 +69,57 @@ function getAccessToken() {
   } catch (_error) {
     return "";
   }
+}
+
+function normalizeParentCapabilities(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const canAssign = !!source.canAssign;
+  return {
+    canUpload: !!source.canUpload,
+    canAssign,
+    canClearAssignment:
+      typeof source.canClearAssignment === "boolean" ? source.canClearAssignment : canAssign,
+    canUseProjectSelector: !!source.canUseProjectSelector || canAssign,
+    assignedOnly: !!source.assignedOnly,
+  };
+}
+
+function capabilitiesFromAuthMessage(data) {
+  if (data?.capabilities && typeof data.capabilities === "object") {
+    return normalizeParentCapabilities(data.capabilities);
+  }
+  if (typeof data?.canUpload === "boolean") {
+    return normalizeParentCapabilities({
+      canUpload: data.canUpload,
+      assignedOnly: !data.canUpload,
+    });
+  }
+  return parentCapabilities;
+}
+
+function getEffectiveCapabilities() {
+  const projects = builderContext?.projects || [];
+  const backendCanUpload = !!builderContext?.can_upload;
+  const backendCanAssign = !!builderContext?.can_assign;
+
+  if (!parentCapabilities) {
+    return {
+      canUpload: backendCanUpload,
+      canAssign: backendCanAssign,
+      canClearAssignment: backendCanAssign,
+      canUseProjectSelector: backendCanAssign || (!builderContext?.assigned_only && projects.length > 0),
+      assignedOnly: !!builderContext?.assigned_only,
+    };
+  }
+
+  return {
+    canUpload: !!parentCapabilities.canUpload && backendCanUpload,
+    canAssign: !!parentCapabilities.canAssign && backendCanAssign,
+    canClearAssignment: !!parentCapabilities.canClearAssignment && backendCanAssign,
+    canUseProjectSelector:
+      !!parentCapabilities.canUseProjectSelector && (backendCanAssign || projects.length > 0),
+    assignedOnly: !!parentCapabilities.assignedOnly || !!builderContext?.assigned_only,
+  };
 }
 
 function isTrustedAuthOrigin(origin) {
@@ -93,9 +144,7 @@ function handleAuthMessage(event) {
     return;
   }
   const nextToken = String(data.accessToken || "").trim();
-  if (typeof data.canUpload === "boolean") {
-    parentCanUpload = data.canUpload;
-  }
+  parentCapabilities = capabilitiesFromAuthMessage(data);
   if (nextToken === parentAccessToken) {
     renderProjectContext();
     return;
@@ -459,6 +508,11 @@ function searchPanel() {
 }
 
 async function loadModel() {
+  if (!getEffectiveCapabilities().canUpload) {
+    setStatus("This role can only view assigned Builder models.", true);
+    return;
+  }
+
   const file = fileInput.files?.[0];
   if (!file) {
     setStatus("Choose an .ifc file first.", true);
@@ -504,13 +558,19 @@ async function loadModel() {
 function renderProjectContext(preferredProjectId = "") {
   if (!builderContext) return;
   const projects = builderContext.projects || [];
-  const showUploadCard =
-    parentCanUpload === null ? !!builderContext.can_upload : !!parentCanUpload;
+  const capabilities = getEffectiveCapabilities();
+  const showUploadCard = capabilities.canUpload;
+  const showAssignmentControls = capabilities.canAssign || capabilities.canClearAssignment;
+  const showProjectCard = projects.length > 0 || showAssignmentControls || capabilities.canUseProjectSelector;
   if (uploadCard) uploadCard.classList.toggle("hidden", !showUploadCard);
-  if (projectCard) projectCard.classList.toggle("hidden", !projects.length && !builderContext.can_assign);
-  if (assignControls) assignControls.classList.toggle("hidden", !builderContext.can_assign);
+  if (projectCard) projectCard.classList.toggle("hidden", !showProjectCard);
+  if (assignControls) assignControls.classList.toggle("hidden", !showAssignmentControls);
+  if (assignedFileInput) assignedFileInput.classList.toggle("hidden", !capabilities.canAssign);
+  if (assignedUploadBtn) assignedUploadBtn.classList.toggle("hidden", !capabilities.canAssign);
+  if (clearAssignedBtn) clearAssignedBtn.classList.toggle("hidden", !capabilities.canClearAssignment);
   if (!projectSelect) return;
 
+  projectSelect.disabled = !capabilities.canUseProjectSelector;
   projectSelect.innerHTML = "";
   for (const project of projects) {
     const option = document.createElement("option");
@@ -526,7 +586,7 @@ function renderProjectContext(preferredProjectId = "") {
     null;
 
   if (!selected) {
-    assignedModelLabel.textContent = builderContext.can_assign
+    assignedModelLabel.textContent = capabilities.canAssign
       ? "Select a project to assign a Builder model."
       : "No Builder model assigned yet.";
     if (showUploadCard) {
@@ -548,10 +608,11 @@ async function loadBuilderContext() {
     const response = await builderFetch("/builder/context");
     builderContext = await parseJsonResponse(response, "Unable to load Builder context.");
     renderProjectContext();
+    const capabilities = getEffectiveCapabilities();
     const selected = getSelectedProject();
     if (selected?.has_builder_model) {
       await loadAssignedProjectModel(selected.id);
-    } else if (builderContext.assigned_only) {
+    } else if (capabilities.assignedOnly || !capabilities.canUpload) {
       clearModel();
       fileLabel.textContent = "No model assigned";
       statsLabel.textContent = "";
@@ -596,6 +657,11 @@ async function loadAssignedProjectModel(projectId) {
 }
 
 async function uploadAssignedModel() {
+  if (!getEffectiveCapabilities().canAssign) {
+    setStatus("Your role cannot assign Builder models.", true);
+    return;
+  }
+
   const project = getSelectedProject();
   const file = assignedFileInput?.files?.[0];
   if (!project) {
@@ -638,6 +704,11 @@ async function uploadAssignedModel() {
 }
 
 async function clearAssignedModel() {
+  if (!getEffectiveCapabilities().canClearAssignment) {
+    setStatus("Your role cannot clear Builder model assignments.", true);
+    return;
+  }
+
   const project = getSelectedProject();
   if (!project) {
     setStatus("Select a project first.", true);
@@ -767,7 +838,13 @@ async function exportPdf() {
 
 loadBtn.addEventListener("click", loadModel);
 exportBtn.addEventListener("click", exportPdf);
-projectSelect?.addEventListener("change", () => loadAssignedProjectModel(projectSelect.value));
+projectSelect?.addEventListener("change", () => {
+  if (!getEffectiveCapabilities().canUseProjectSelector) {
+    renderProjectContext(projectSelect.value);
+    return;
+  }
+  loadAssignedProjectModel(projectSelect.value);
+});
 assignedUploadBtn?.addEventListener("click", uploadAssignedModel);
 clearAssignedBtn?.addEventListener("click", clearAssignedModel);
 window.addEventListener("message", handleAuthMessage);
