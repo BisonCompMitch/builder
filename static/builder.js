@@ -566,7 +566,10 @@ function renderProjectContext(preferredProjectId = "") {
   if (uploadCard) uploadCard.classList.toggle("hidden", !showUploadCard);
   if (projectCard) projectCard.classList.toggle("hidden", !showProjectCard);
   if (assignControls) assignControls.classList.toggle("hidden", !showAssignmentControls);
-  if (assignedFileInput) assignedFileInput.classList.toggle("hidden", !capabilities.canAssign);
+  if (assignedFileInput) {
+    assignedFileInput.classList.add("hidden");
+    assignedFileInput.disabled = !capabilities.canAssign;
+  }
   if (assignedUploadBtn) assignedUploadBtn.classList.toggle("hidden", !capabilities.canAssign);
   if (clearAssignedBtn) clearAssignedBtn.classList.toggle("hidden", !capabilities.canClearAssignment);
   if (!projectSelect) return;
@@ -670,7 +673,7 @@ async function uploadAssignedModel() {
     return;
   }
   if (!file) {
-    setStatus("Choose an .ifc file to assign.", true);
+    assignedFileInput?.click();
     return;
   }
   if (!file.name.toLowerCase().endsWith(".ifc")) {
@@ -701,6 +704,21 @@ async function uploadAssignedModel() {
     setStatus(`Assignment failed: ${error.message}`, true);
   } finally {
     assignedUploadBtn.disabled = false;
+  }
+}
+
+function chooseAssignedModelFile() {
+  if (!getEffectiveCapabilities().canAssign) {
+    setStatus("Your role cannot assign Builder models.", true);
+    return;
+  }
+  if (!getSelectedProject()) {
+    setStatus("Select a project first.", true);
+    return;
+  }
+  if (assignedFileInput) {
+    assignedFileInput.value = "";
+    assignedFileInput.click();
   }
 }
 
@@ -846,7 +864,8 @@ projectSelect?.addEventListener("change", () => {
   }
   loadAssignedProjectModel(projectSelect.value);
 });
-assignedUploadBtn?.addEventListener("click", uploadAssignedModel);
+assignedFileInput?.addEventListener("change", uploadAssignedModel);
+assignedUploadBtn?.addEventListener("click", chooseAssignedModelFile);
 clearAssignedBtn?.addEventListener("click", clearAssignedModel);
 window.addEventListener("message", handleAuthMessage);
 window.addEventListener("resize", onResize);
