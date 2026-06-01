@@ -180,7 +180,8 @@ function builderApiBase() {
 }
 
 function builderApiPath(path) {
-  return `${builderApiBase()}/api${path}`;
+  const base = builderApiBase();
+  return `${base}${path}`;
 }
 
 function authHeaders(extra = {}) {
