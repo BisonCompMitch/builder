@@ -212,6 +212,7 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--text);
+  color-scheme: dark;
   padding: 9px 12px;
   font-size: 0.88rem;
   font-family: inherit;
@@ -226,6 +227,36 @@
 
 .search-input::placeholder {
   color: var(--muted);
+}
+
+.search-input option {
+  background: #111827;
+  color: #f8fafc;
+}
+
+.search-input option:checked,
+.search-input option:hover {
+  background: #2cc6a9;
+  color: #041b16;
+}
+
+body[data-theme="light"] .search-input,
+body[data-theme="light"] .project-name-label {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  color: #0f172a;
+  color-scheme: light;
+}
+
+body[data-theme="light"] .search-input option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+body[data-theme="light"] .search-input option:checked,
+body[data-theme="light"] .search-input option:hover {
+  background: #d9f6ef;
+  color: #0f172a;
 }
 
 /* ── Modal ── */

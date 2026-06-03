@@ -27,6 +27,25 @@ body {
   font-family: "Segoe UI", "Trebuchet MS", "Lucida Sans Unicode", sans-serif;
 }
 
+body[data-theme="light"] {
+  --bg-0: #edf4f7;
+  --bg-1: #f6fafb;
+  --bg-2: #e7eef3;
+  --panel: rgba(255, 255, 255, 0.92);
+  --line: rgba(15, 23, 42, 0.14);
+  --text: #0f172a;
+  --muted: #526273;
+  --accent: #0f9f8a;
+  --accent-2: #c76a16;
+  --danger: #c2414b;
+  color-scheme: light;
+  background:
+    radial-gradient(1200px 500px at 85% -20%, rgba(15, 159, 138, 0.14), transparent 70%),
+    radial-gradient(900px 500px at 15% 120%, rgba(199, 106, 22, 0.1), transparent 70%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  color: var(--text);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 360px 1fr;

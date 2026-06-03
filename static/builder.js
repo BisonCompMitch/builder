@@ -99,6 +99,11 @@ function capabilitiesFromAuthMessage(data) {
   return parentCapabilities;
 }
 
+function applyParentTheme(value) {
+  const theme = String(value || "").trim().toLowerCase() === "light" ? "light" : "dark";
+  document.body.setAttribute("data-theme", theme);
+}
+
 function getEffectiveCapabilities() {
   const projects = builderContext?.projects || [];
   const backendCanUpload = !!builderContext?.can_upload;
@@ -150,6 +155,7 @@ function handleAuthMessage(event) {
     return;
   }
   const nextToken = String(data.accessToken || "").trim();
+  applyParentTheme(data.theme);
   parentCapabilities = capabilitiesFromAuthMessage(data);
   if (nextToken === parentAccessToken) {
     renderProjectContext(projectSelect?.value || loadedAssignedProjectId || "");
