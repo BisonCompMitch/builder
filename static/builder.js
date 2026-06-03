@@ -100,8 +100,8 @@ function capabilitiesFromAuthMessage(data) {
 }
 
 function applyParentTheme(value) {
-  const theme = String(value || "").trim().toLowerCase() === "light" ? "light" : "dark";
-  document.body.setAttribute("data-theme", theme);
+  void value;
+  document.body.setAttribute("data-theme", "dark");
 }
 
 function getEffectiveCapabilities() {
