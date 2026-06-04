@@ -92,7 +92,15 @@
           <span id="fileLabel">No model loaded</span>
           <span id="statsLabel" class="stats-label"></span>
         </div>
-        <div id="viewerContainer"></div>
+        <div id="viewerContainer">
+          <div id="viewerLoadingOverlay" class="viewer-loading-overlay hidden" aria-live="polite">
+            <div class="viewer-loading-card">
+              <div class="viewer-loading-spinner" aria-hidden="true"></div>
+              <div id="viewerLoadingTitle" class="viewer-loading-title">Loading project model</div>
+              <div id="viewerLoadingDetail" class="viewer-loading-detail">Preparing the 3D preview...</div>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
 

@@ -273,8 +273,62 @@ input[type="file"] {
 }
 
 #viewerContainer {
+  position: relative;
   flex: 1;
   min-height: 220px;
+  overflow: hidden;
+}
+
+.viewer-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 13, 20, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.viewer-loading-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(320px, 100%);
+  padding: 22px 20px;
+  border: 1px solid rgba(44, 198, 169, 0.35);
+  border-radius: 14px;
+  background: rgba(11, 16, 21, 0.88);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.viewer-loading-spinner {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 3px solid rgba(232, 237, 242, 0.18);
+  border-top-color: var(--accent);
+  animation: viewer-loading-spin 0.9s linear infinite;
+}
+
+.viewer-loading-title {
+  color: var(--text);
+  font-weight: 750;
+  font-size: 1rem;
+}
+
+.viewer-loading-detail {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+@keyframes viewer-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .hidden {

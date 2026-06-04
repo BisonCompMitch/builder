@@ -15,6 +15,9 @@ const modalOverlay = document.getElementById("modalOverlay");
 const modalMessage = document.getElementById("modalMessage");
 const modalClose = document.getElementById("modalClose");
 const viewerContainer = document.getElementById("viewerContainer");
+const viewerLoadingOverlay = document.getElementById("viewerLoadingOverlay");
+const viewerLoadingTitle = document.getElementById("viewerLoadingTitle");
+const viewerLoadingDetail = document.getElementById("viewerLoadingDetail");
 const noSelection = document.getElementById("noSelection");
 const componentInfo = document.getElementById("componentInfo");
 const compName = document.getElementById("compName");
@@ -234,6 +237,13 @@ function setStatus(message, isError = false) {
   statusText.textContent = message;
   statusText.style.color = isError ? "#e2646d" : "#e8edf2";
   if (isError) statusCard.classList.remove("hidden");
+}
+
+function setViewerLoading(isLoading, message = "Loading project model") {
+  if (!viewerLoadingOverlay) return;
+  if (viewerLoadingTitle) viewerLoadingTitle.textContent = message;
+  if (viewerLoadingDetail) viewerLoadingDetail.textContent = "Preparing the 3D preview...";
+  viewerLoadingOverlay.classList.toggle("hidden", !isLoading);
 }
 
 function initViewer() {
@@ -539,6 +549,7 @@ async function loadModel() {
   fileLabel.textContent = file.name;
   statsLabel.textContent = "";
   setStatus(`Loading ${file.name}...`);
+  setViewerLoading(true, `Loading ${file.name}`);
   loadBtn.disabled = true;
 
   try {
@@ -564,6 +575,7 @@ async function loadModel() {
     console.error(error);
     setStatus(`Load failed: ${error.message}`, true);
   } finally {
+    setViewerLoading(false);
     loadBtn.disabled = false;
   }
 }
@@ -654,6 +666,7 @@ async function loadBuilderContext(preferredProjectId = "") {
 async function loadAssignedProjectModel(projectId) {
   const project = (builderContext?.projects || []).find((item) => item.id === projectId);
   if (!project?.has_builder_model) {
+    setViewerLoading(false);
     clearModel();
     loadedAssignedProjectId = null;
     fileLabel.textContent = "No model assigned";
@@ -665,6 +678,7 @@ async function loadAssignedProjectModel(projectId) {
   fileLabel.textContent = project.builder_file_name || "Assigned Builder model";
   statsLabel.textContent = "";
   setStatus(`Loading ${project.builder_file_name || "assigned model"}...`);
+  setViewerLoading(true, `Loading ${project.builder_file_name || "assigned model"}`);
   try {
     const response = await builderFetch(`/builder/projects/${encodeURIComponent(projectId)}/model/preview`);
     const payload = await parseJsonResponse(response, "Assigned model load failed.");
@@ -679,6 +693,8 @@ async function loadAssignedProjectModel(projectId) {
   } catch (error) {
     console.error(error);
     setStatus(`Assigned model load failed: ${error.message}`, true);
+  } finally {
+    setViewerLoading(false);
   }
 }
 
