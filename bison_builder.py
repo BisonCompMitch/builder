@@ -401,7 +401,30 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                     canv.setLineWidth(0.35)
                     canv.rect(opx0, opy0, opw, oph, fill=1, stroke=1)
 
-            # Label to the right of the panel
+            # Per-panel dimension annotation (wall length in inches, ScotSteel style)
+            wall_len_m = max(bx1 - bx0, by1 - by0)
+            is_horiz   = (bx1 - bx0) >= (by1 - by0)
+            if wall_len_m >= 0.30:
+                dim_txt = _fmt_inches(wall_len_m)
+                canv.setFillColorRGB(0.25, 0.25, 0.25)
+                canv.setStrokeColorRGB(0.45, 0.45, 0.45)
+                canv.setLineWidth(0.3)
+                if is_horiz and pw >= 14:
+                    ty = py0 + ph + 1.5
+                    canv.line(px0,      py0 + ph, px0,      ty + 5)
+                    canv.line(px0 + pw, py0 + ph, px0 + pw, ty + 5)
+                    canv.line(px0 + 1,  ty + 3,   px0 + pw - 1, ty + 3)
+                    canv.setFont("Helvetica", 4.5)
+                    canv.drawCentredString(px0 + pw / 2, ty + 4.5, dim_txt)
+                elif not is_horiz and ph >= 14:
+                    canv.saveState()
+                    canv.translate(px0 - 2, py0 + ph / 2)
+                    canv.rotate(90)
+                    canv.setFont("Helvetica", 4.5)
+                    canv.drawCentredString(0, 1, dim_txt)
+                    canv.restoreState()
+
+            # Label (RED bold) to the right of the panel
             if item["name"]:
                 lx = px0 + pw + 4
                 ly = py0 + ph / 2
@@ -409,8 +432,8 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 canv.setLineWidth(0.3)
                 canv.setStrokeColorRGB(0.55, 0.55, 0.55)
                 canv.line(px0 + pw, ly, lx - 1, ly)
-                canv.setFont("Helvetica", fs)
-                canv.setFillColorRGB(0.05, 0.05, 0.05)
+                canv.setFont("Helvetica-Bold", fs)
+                canv.setFillColorRGB(0.80, 0.02, 0.02)
                 canv.drawString(lx, ly - fs * 0.36, item["name"][:20])
 
         mm_per_pt = 25.4 / 72
@@ -418,6 +441,25 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         canv.setFont("Helvetica", 6.5)
         canv.setFillColor(_rl_colors.black)
         canv.drawString(DRAW_X + 4, DRAW_Y + 4, f"Scale  1 : {ratio:.0f}")
+
+        # ── north arrow (top-right of drawing area) ──────────────────────────
+        na_cx = DRAW_X + DRAW_W - 18
+        na_cy = DRAW_Y + DRAW_H - 20
+        na_r  = 9
+        canv.setStrokeColor(_rl_colors.black)
+        canv.setLineWidth(0.8)
+        canv.circle(na_cx, na_cy, na_r, fill=0, stroke=1)
+        canv.setLineWidth(1.1)
+        canv.line(na_cx, na_cy - na_r + 3, na_cx, na_cy + na_r - 2)
+        path = canv.beginPath()
+        path.moveTo(na_cx, na_cy + na_r - 2)
+        path.lineTo(na_cx - 3, na_cy + 1)
+        path.lineTo(na_cx + 3, na_cy + 1)
+        path.close()
+        canv.setFillColor(_rl_colors.black)
+        canv.drawPath(path, fill=1, stroke=0)
+        canv.setFont("Helvetica-Bold", 7)
+        canv.drawCentredString(na_cx, na_cy - na_r - 6, "N")
 
     def _fmt_ftin(meters: float) -> str:
         """Format metres as feet-inch string, e.g. 2.74 → 9'-0\". Handles negatives."""
@@ -428,6 +470,18 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         if inch == 12:
             feet += 1; inch = 0
         return f"{sign}{feet}'-{inch}\""
+
+    def _fmt_inches(meters: float) -> str:
+        """Format metres as inch string with fractions (nearest 1/8), e.g. 2.095 → 82 1/2\"."""
+        total_in = abs(meters) * 39.3701
+        whole    = int(total_in)
+        eighths  = round((total_in - whole) * 8)
+        if eighths == 8:
+            whole += 1; eighths = 0
+        if eighths == 0:
+            return f'{whole}"'
+        g = math.gcd(eighths, 8)
+        return f'{whole} {eighths // g}/{8 // g}"'
 
     # ── page renderer — draws actual member hulls + name labels beside panels ─
     def _draw_page(title: str, panel_items: list, show_heights: bool = False) -> None:
@@ -510,6 +564,8 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         # Draw labels after geometry — sort by y and push apart to avoid overlap
         FS        = 5.5
         MIN_GAP   = FS + 1.5   # minimum vertical gap between label baselines
+        lbl_bot   = DRAW_Y + 2
+        lbl_top   = DRAW_Y + DRAW_H - 4
         pending_labels.sort(key=lambda t: t[1])
         placed_y: list[float] = []
         for px_max, ly_ideal, name, r, g, b in pending_labels:
@@ -521,6 +577,11 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 else:
                     break
             placed_y.append(ly)
+        # Shift entire stack down if labels escaped the drawing area at the top
+        if placed_y and placed_y[-1] > lbl_top:
+            shift = placed_y[-1] - lbl_top
+            placed_y = [max(lbl_bot, y - shift) for y in placed_y]
+        for (px_max, ly_ideal, name, r, g, b), ly in zip(pending_labels, placed_y):
             lx = px_max + 4
             canv.setLineWidth(0.3)
             canv.setStrokeColorRGB(0.55, 0.55, 0.55)
@@ -564,6 +625,287 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         # scale annotation
         mm_per_pt = 25.4 / 72
         ratio     = 1000 / (scale * mm_per_pt)
+        canv.setFont("Helvetica", 6.5)
+        canv.setFillColor(_rl_colors.black)
+        canv.drawString(DRAW_X + 4, DRAW_Y + 4, f"Scale  1 : {ratio:.0f}")
+
+    def _draw_combined_plan_page(title: str, pid_set: set) -> None:
+        """Combined floor plan: wall bboxes (with openings) + truss convex hulls."""
+        wall_items  = _wall_plan_items(pid_set, {"Walls"})
+        truss_items = _panel_items(pid_set, {"Trusses"}, "plan")
+        if not wall_items and not truss_items:
+            return
+        _new_page(title)
+
+        # unified coordinate bounds from both sets
+        bpts: list = []
+        for it in wall_items:
+            bx0, by0, bx1, by1 = it["bbox"]
+            bpts += [(bx0, by0), (bx1, by1)]
+        for it in truss_items:
+            for h in it["hulls"]:
+                bpts += h
+        if not bpts:
+            return
+
+        ax0 = min(p[0] for p in bpts); ax1 = max(p[0] for p in bpts)
+        ay0 = min(p[1] for p in bpts); ay1 = max(p[1] for p in bpts)
+        rx = ax1 - ax0 or 1.0
+        ry = ay1 - ay0 or 1.0
+
+        pad         = 22
+        lbl_reserve = 64
+        aw    = DRAW_W - 2 * pad - lbl_reserve
+        ah    = DRAW_H - 2 * pad
+        scale = min(aw / rx, ah / ry)
+        ox_off = DRAW_X + pad + (aw - rx * scale) / 2
+        oy_off = DRAW_Y + pad + (ah - ry * scale) / 2
+        lx0   = ox_off + rx * scale + 5   # label column left edge
+
+        def cpdf(wx: float, wy: float) -> tuple:
+            return ox_off + (wx - ax0) * scale, oy_off + (wy - ay0) * scale
+
+        pending: list = []  # (px_max, py_mid, name, r, g, b)
+
+        # walls + floors as filled bboxes
+        for item in wall_items:
+            r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
+            bx0i, by0i, bx1i, by1i = item["bbox"]
+            px0, py0 = cpdf(bx0i, by0i)
+            pw = (bx1i - bx0i) * scale
+            ph = (by1i - by0i) * scale
+            if pw < 0.4 or ph < 0.4:
+                continue
+            canv.setFillColorRGB(r * 0.05 + 0.95, g * 0.05 + 0.95, b * 0.05 + 0.95)
+            canv.setStrokeColorRGB(r, g, b)
+            canv.setLineWidth(0.55)
+            canv.rect(px0, py0, pw, ph, fill=1, stroke=1)
+            for ox0b, oy0b, ox1b, oy1b in item.get("op_bboxes", []):
+                opx0, opy0 = cpdf(ox0b, oy0b)
+                opw = (ox1b - ox0b) * scale
+                oph = (oy1b - oy0b) * scale
+                if opw > 0.4 and oph > 0.4:
+                    canv.setFillColor(_rl_colors.white)
+                    canv.setStrokeColorRGB(0.6, 0.6, 0.6)
+                    canv.setLineWidth(0.3)
+                    canv.rect(opx0, opy0, opw, oph, fill=1, stroke=1)
+            if item["name"]:
+                pending.append((px0 + pw, py0 + ph / 2, item["name"], r, g, b))
+
+        # trusses as convex hulls drawn on top
+        for item in truss_items:
+            r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
+            fill_r = r * 0.14 + 0.86
+            fill_g = g * 0.14 + 0.86
+            fill_b = b * 0.14 + 0.86
+            px_max = -1e18; py_sum = 0.0; py_cnt = 0
+            for hull in item["hulls"]:
+                if not hull:
+                    continue
+                pts = [cpdf(x, y) for x, y in hull]
+                for px, py in pts:
+                    if px > px_max: px_max = px
+                    py_sum += py; py_cnt += 1
+                canv.setFillColorRGB(fill_r, fill_g, fill_b)
+                canv.setStrokeColorRGB(r, g, b)
+                canv.setLineWidth(0.7)
+                if len(pts) >= 3:
+                    path = canv.beginPath()
+                    path.moveTo(*pts[0])
+                    for p in pts[1:]:
+                        path.lineTo(*p)
+                    path.close()
+                    canv.drawPath(path, fill=1, stroke=1)
+                elif len(pts) == 2:
+                    canv.setLineWidth(1.2)
+                    canv.line(pts[0][0], pts[0][1], pts[1][0], pts[1][1])
+            if item["name"] and px_max > -1e17 and py_cnt:
+                pending.append((px_max, py_sum / py_cnt, item["name"], r, g, b))
+
+        # collision-aware label column
+        FS      = 5.0
+        MIN_GAP = FS + 1.2
+        lbl_bot = DRAW_Y + 2
+        lbl_top = DRAW_Y + DRAW_H - 4
+        pending.sort(key=lambda t: t[1])
+        placed_y: list[float] = []
+        for _px, ly_ideal, _nm, _r, _g, _b in pending:
+            ly = ly_ideal
+            for prev_y in reversed(placed_y):
+                if ly - prev_y < MIN_GAP:
+                    ly = prev_y + MIN_GAP
+                else:
+                    break
+            placed_y.append(ly)
+        if placed_y and placed_y[-1] > lbl_top:
+            shift = placed_y[-1] - lbl_top
+            placed_y = [max(lbl_bot, y - shift) for y in placed_y]
+        for (px_max, ly_ideal, name, r, g, b), ly in zip(pending, placed_y):
+            canv.setLineWidth(0.25)
+            canv.setStrokeColorRGB(0.6, 0.6, 0.6)
+            canv.line(px_max, ly_ideal, lx0 - 1, ly_ideal)
+            if abs(ly - ly_ideal) > 0.5:
+                canv.line(lx0 - 1, ly_ideal, lx0 - 1, ly)
+            canv.setFont("Helvetica", FS)
+            canv.setFillColorRGB(r, g, b)
+            canv.drawString(lx0, ly - FS * 0.35, name[:22])
+
+        mm_per_pt = 25.4 / 72
+        ratio = 1000 / (scale * mm_per_pt)
+        canv.setFont("Helvetica", 6.5)
+        canv.setFillColor(_rl_colors.black)
+        canv.drawString(DRAW_X + 4, DRAW_Y + 4, f"Scale  1 : {ratio:.0f}")
+
+        # ── north arrow (label column, near top) ─────────────────────────────
+        na_cx = min(lx0 + 28, DRAW_X + DRAW_W - 12)
+        na_cy = DRAW_Y + DRAW_H - 24
+        na_r  = 9
+        canv.setStrokeColor(_rl_colors.black)
+        canv.setLineWidth(0.8)
+        canv.circle(na_cx, na_cy, na_r, fill=0, stroke=1)
+        canv.setLineWidth(1.1)
+        canv.line(na_cx, na_cy - na_r + 3, na_cx, na_cy + na_r - 2)
+        path = canv.beginPath()
+        path.moveTo(na_cx, na_cy + na_r - 2)
+        path.lineTo(na_cx - 3, na_cy + 1)
+        path.lineTo(na_cx + 3, na_cy + 1)
+        path.close()
+        canv.setFillColor(_rl_colors.black)
+        canv.drawPath(path, fill=1, stroke=0)
+        canv.setFont("Helvetica-Bold", 7)
+        canv.drawCentredString(na_cx, na_cy - na_r - 6, "N")
+
+        # ── overall width dimension (bottom of plan content) ─────────────────
+        wdim_y = DRAW_Y + 14
+        lpx, _ = cpdf(ax0, ay0)
+        rpx, _ = cpdf(ax1, ay0)
+        if rpx - lpx > 10:
+            canv.setStrokeColorRGB(0.25, 0.25, 0.25)
+            canv.setLineWidth(0.4)
+            canv.line(lpx, wdim_y - 2, lpx, wdim_y + 7)
+            canv.line(rpx, wdim_y - 2, rpx, wdim_y + 7)
+            canv.line(lpx, wdim_y + 3, rpx, wdim_y + 3)
+            w_ft = (ax1 - ax0) / 0.3048
+            wft = int(w_ft); win = int(round((w_ft - wft) * 12))
+            if win == 12: wft += 1; win = 0
+            canv.setFont("Helvetica-Bold", 6)
+            canv.setFillColor(_rl_colors.black)
+            canv.drawCentredString((lpx + rpx) / 2, wdim_y + 5, f"{wft}'-{win}\"")
+
+    # ── architectural elevation: clean bbox rectangles, height scale, dim ────
+    def _draw_elevation_page(title: str, elev_items: list) -> None:
+        if not elev_items:
+            return
+        _new_page(title)
+
+        all_bpts = [(it["bbox"][0], it["bbox"][1]) for it in elev_items] + \
+                   [(it["bbox"][2], it["bbox"][3]) for it in elev_items]
+        if not all_bpts:
+            return
+        ax0 = min(p[0] for p in all_bpts); ax1 = max(p[0] for p in all_bpts)
+        ay0 = min(p[1] for p in all_bpts); ay1 = max(p[1] for p in all_bpts)
+        rx  = ax1 - ax0 or 1.0
+        ry  = ay1 - ay0 or 1.0
+
+        HT_W  = 38   # left height-scale column
+        DIM_H = 20   # bottom dimension row
+        pad   = 14
+        aw    = DRAW_W - HT_W - 2 * pad
+        ah    = DRAW_H - 2 * pad - DIM_H
+        scale = min(aw / rx, ah / ry)
+        ox    = DRAW_X + HT_W + pad + (aw - rx * scale) / 2
+        oy    = DRAW_Y + DIM_H + pad + (ah - ry * scale) / 2
+
+        def epdf(h: float, z: float) -> tuple:
+            return ox + (h - ax0) * scale, oy + (z - ay0) * scale
+
+        # Painter's algorithm: back-to-front by sort_depth (lowest = furthest from camera)
+        for item in sorted(elev_items, key=lambda it: it.get("sort_depth", 0)):
+            h0, z0, h1, z1 = item["bbox"]
+            px, pz = epdf(h0, z0)
+            pw = (h1 - h0) * scale
+            ph = (z1 - z0) * scale
+            if pw < 0.3 or ph < 0.3:
+                continue
+            # White backing covers anything drawn behind this panel
+            canv.setFillColor(_rl_colors.white)
+            canv.setStrokeColor(_rl_colors.white)
+            canv.rect(px, pz, pw, ph, fill=1, stroke=0)
+            # Colored panel on top
+            r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
+            canv.setFillColorRGB(r * 0.08 + 0.92, g * 0.08 + 0.92, b * 0.08 + 0.92)
+            canv.setStrokeColorRGB(max(0, r * 0.7), max(0, g * 0.7), max(0, b * 0.7))
+            canv.setLineWidth(0.6)
+            canv.rect(px, pz, pw, ph, fill=1, stroke=1)
+            for oh0, oz0, oh1, oz1 in item.get("op_bboxes", []):
+                opx, opz = epdf(oh0, oz0)
+                opw = (oh1 - oh0) * scale
+                oph = (oz1 - oz0) * scale
+                if opw > 0.3 and oph > 0.3:
+                    canv.setFillColor(_rl_colors.white)
+                    canv.setStrokeColorRGB(0.65, 0.65, 0.65)
+                    canv.setLineWidth(0.3)
+                    canv.rect(opx, opz, opw, oph, fill=1, stroke=1)
+
+        # Height scale (left side)
+        scx = DRAW_X + HT_W - 4
+        py_bot = oy
+        py_top = oy + ry * scale
+        canv.setLineWidth(0.5)
+        canv.setStrokeColorRGB(0.3, 0.3, 0.3)
+        canv.line(scx, py_bot, scx, py_top)
+        tick_m = 0.3048   # every 1 ft
+        z = math.ceil(ay0 / tick_m) * tick_m
+        while z <= ay1 + 1e-6:
+            py = oy + (z - ay0) * scale
+            canv.setLineWidth(0.4)
+            canv.line(scx - 3, py, scx, py)
+            canv.setFont("Helvetica", 5.0)
+            canv.setFillColorRGB(0.15, 0.15, 0.15)
+            canv.drawRightString(scx - 4, py - 1.8, _fmt_ftin(z - ay0))
+            z += tick_m
+
+        # Overall width dimension (bottom)
+        dpy = DRAW_Y + DIM_H - 5
+        lp, _ = epdf(ax0, ay0)
+        rp, _ = epdf(ax1, ay0)
+        if rp - lp > 10:
+            canv.setStrokeColorRGB(0.2, 0.2, 0.2)
+            canv.setLineWidth(0.4)
+            canv.line(lp, dpy - 1, lp, dpy + 8)
+            canv.line(rp, dpy - 1, rp, dpy + 8)
+            canv.line(lp, dpy + 3, rp, dpy + 3)
+            w_ft = (ax1 - ax0) / 0.3048
+            wft = int(w_ft); win = int(round((w_ft - wft) * 12))
+            if win == 12: wft += 1; win = 0
+            canv.setFont("Helvetica-Bold", 6.5)
+            canv.setFillColor(_rl_colors.black)
+            canv.drawCentredString((lp + rp) / 2, dpy + 5, f"{wft}'-{win}\"")
+
+        # Overall height dimension (right side)
+        hbp, _ = epdf(ax1, ay0)
+        htp, _ = epdf(ax1, ay1)
+        hdx = hbp + 12
+        _, hb_y = epdf(ax0, ay0)
+        _, ht_y = epdf(ax0, ay1)
+        if ht_y - hb_y > 10 and hdx < DRAW_X + DRAW_W - 4:
+            canv.setLineWidth(0.4)
+            canv.line(hdx - 3, hb_y, hdx + 3, hb_y)
+            canv.line(hdx - 3, ht_y, hdx + 3, ht_y)
+            canv.line(hdx, hb_y, hdx, ht_y)
+            h_ft = (ay1 - ay0) / 0.3048
+            hft = int(h_ft); hin = int(round((h_ft - hft) * 12))
+            if hin == 12: hft += 1; hin = 0
+            canv.saveState()
+            canv.translate(hdx + 7, (hb_y + ht_y) / 2)
+            canv.rotate(90)
+            canv.setFont("Helvetica-Bold", 6.5)
+            canv.setFillColor(_rl_colors.black)
+            canv.drawCentredString(0, 0, f"{hft}'-{hin}\"")
+            canv.restoreState()
+
+        mm_per_pt = 25.4 / 72
+        ratio = 1000 / (scale * mm_per_pt)
         canv.setFont("Helvetica", 6.5)
         canv.setFillColor(_rl_colors.black)
         canv.drawString(DRAW_X + 4, DRAW_Y + 4, f"Scale  1 : {ratio:.0f}")
@@ -728,7 +1070,7 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             })
         return result
 
-    # ── helpers: hull-based items (trusses, elevations) ───────────────────────
+    # ── helpers: hull-based items (trusses, plan views) ──────────────────────
     def _panel_items(pid_set: set, buckets: set, view: str) -> list:
         result = []
         for pid in pid_set:
@@ -745,19 +1087,63 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 result.append({"name": p["name"], "bucket": p["bucket"], "hulls": hulls})
         return result
 
+    def _elevation_bbox_items(pid_set: set, buckets: set, direction: str) -> list:
+        """Per-panel bounding boxes + painter-sort depth for back-to-front rendering."""
+        # sign: lower sort_depth = farther from camera = drawn first
+        depth_sign = -1.0 if direction in ("south", "west") else 1.0
+        result = []
+        for pid in pid_set:
+            p = panels.get(pid)
+            if not p or p["bucket"] not in buckets:
+                continue
+            hs, zs, ds = [], [], []
+            for vf in p["entities"].values():
+                for i in range(0, len(vf) - 2, 3):
+                    x, y, z = vf[i], vf[i + 1], vf[i + 2]
+                    if   direction == "north": hs.append(x);  ds.append(y)
+                    elif direction == "south": hs.append(-x); ds.append(y)
+                    elif direction == "east":  hs.append(-y); ds.append(x)
+                    else:                      hs.append(y);  ds.append(x)
+                    zs.append(z)
+            if not hs:
+                continue
+            sort_depth = (sum(ds) / len(ds)) * depth_sign
+            op_bboxes = []
+            for ov in panel_opening_verts.get(pid, []):
+                ohs, ozs = [], []
+                for i in range(0, len(ov) - 2, 3):
+                    x, y, z = ov[i], ov[i + 1], ov[i + 2]
+                    if   direction == "north": ohs.append(x)
+                    elif direction == "south": ohs.append(-x)
+                    elif direction == "east":  ohs.append(-y)
+                    else:                      ohs.append(y)
+                    ozs.append(z)
+                if ohs:
+                    op_bboxes.append((min(ohs), min(ozs), max(ohs), max(ozs)))
+            result.append({
+                "name":       p["name"],
+                "bucket":     p["bucket"],
+                "bbox":       (min(hs), min(zs), max(hs), max(zs)),
+                "op_bboxes":  op_bboxes,
+                "sort_depth": sort_depth,
+            })
+        return result
+
     # ── elevation occlusion + roof/truss selection ────────────────────────────
     def _elevation_pids(wall_cands: set, roof_cands: set, truss_cands: set,
-                        direction: str) -> tuple:
+                        floor_cands: set, direction: str) -> tuple:
         """
-        Returns (visible_walls, visible_roofs, visible_trusses).
+        Returns (visible_walls, visible_roofs, visible_trusses, visible_floors).
 
-        Walls  — per-1ft scan band, keep only the frontmost wall(s) (≤0.8 m depth
-                 tolerance).  Any wall entirely behind another in the same band is
-                 dropped.
-        Roofs  — only roofs whose span overlaps a visible wall AND that survive
-                 their own per-band depth occlusion.
+        Walls   — per-1ft scan band, keep only the frontmost wall(s) (≤1.0 m depth
+                  tolerance).  Any wall entirely behind another in the same band is
+                  dropped.
+        Roofs   — only roofs whose span overlaps a visible wall AND that survive
+                  their own per-band depth occlusion.
         Trusses — only trusses whose span overlaps a visible wall AND that have no
-                 visible roof panel above them in the same span.
+                  visible roof panel above them in the same span.
+        Floors  — all floors whose span overlaps any visible wall (fills the
+                  level-transition gap between storeys in the elevation).
         """
         BAND     = 0.3048          # 1 foot
         want_max = direction in ("E", "N")
@@ -778,8 +1164,8 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             return {"depth": depth, "slo": slo, "shi": shi,
                     "zlo": min(zs), "zhi": max(zs)}
 
-        def _scanline(pid_set: set, tol: float = 0.8) -> tuple[set, dict]:
-            """Depth-occlusion scan. tol=0.8 m for walls/roofs, ~0 for trusses."""
+        def _scanline(pid_set: set, tol: float = 1.0) -> tuple[set, dict]:
+            """Depth-occlusion scan. tol=1.0 m for walls/roofs, ~0 for trusses."""
             imap = {pid: inf for pid in pid_set
                     if (inf := _info(pid)) is not None}
             if not imap:
@@ -801,10 +1187,10 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 pos += BAND
             return vis or set(imap), imap
 
-        # Stage 1 — visible walls
-        vis_walls, wall_imap = _scanline(wall_cands)
+        # Stage 1 — visible walls (3 m tolerance captures setbacks while excluding interior walls)
+        vis_walls, wall_imap = _scanline(wall_cands, tol=3.0)
         if not vis_walls:
-            return wall_cands, set(), set()
+            return wall_cands, set(), set(), set()
 
         vis_spans = [(wall_imap[p]["slo"], wall_imap[p]["shi"]) for p in vis_walls]
 
@@ -815,7 +1201,7 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         roof_cands_filtered = {p for p in roof_cands
                                 if (inf := _info(p)) is not None
                                 and _overlaps_walls(inf["slo"], inf["shi"])}
-        vis_roofs, roof_imap = _scanline(roof_cands_filtered)
+        vis_roofs, roof_imap = _scanline(roof_cands_filtered, tol=3.0)
 
         # Stage 3 — trusses: span overlaps walls, frontmost per band only (tol≈0),
         #           then drop any truss that has a visible roof above it in span.
@@ -835,57 +1221,42 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             if not has_roof:
                 vis_trusses.add(pid)
 
-        return vis_walls, vis_roofs, vis_trusses
+        # Stage 4 — floors whose horizontal span overlaps a visible wall span.
+        # These fill the level-transition gap between storeys in the elevation.
+        vis_floors: set = {p for p in floor_cands
+                           if (inf := _info(p)) is not None
+                           and _overlaps_walls(inf["slo"], inf["shi"])}
 
-    all_pids = set(panels)
+        return vis_walls, vis_roofs, vis_trusses, vis_floors
 
-    # ── WALL FLOOR PLANS (bbox + openings, one page per Z-level) ─────────────
-    for _key, sname, pids in final_storeys:
-        _draw_wall_plan_page(f"Wall Plan  {sname}",
-                             _wall_plan_items(pids, {"Walls", "Floors"}))
+    # ── WALL PLANS + TRUSS PLANS — separate pages per storey ─────────────────
+    for _sort_key, sname, pids in final_storeys:
+        wall_its = _wall_plan_items(pids, {"Walls"})
+        if wall_its:
+            _draw_wall_plan_page(f"Wall Plan  {sname}", wall_its)
+        truss_its = _panel_items(pids, {"Trusses"}, "plan")
+        if truss_its:
+            _draw_page(f"Truss Plan  {sname}", truss_its)
 
-    # ── TRUSS PLANS (one page per Z-level) ───────────────────────────────────
-    for _key, sname, pids in final_storeys:
-        _draw_page(f"Truss Plan  {sname}",
-                   _panel_items(pids, {"Trusses"}, "plan"))
-
-    # ── STRUCTURAL ELEMENTS ───────────────────────────────────────────────────
-    _draw_page("Structural Elements",
-               _panel_items(all_pids, {"Structure"}, "plan"))
-
-    # ── ROOF ─────────────────────────────────────────────────────────────────
-    _draw_page("Roof Elements",
-               _panel_items(all_pids, {"Roofs"}, "plan"))
-
-    # ── CEILINGS ─────────────────────────────────────────────────────────────
-    _draw_page("Ceiling Elements",
-               _panel_items(all_pids, {"Ceilings"}, "plan"))
-
-    # ── OTHER ─────────────────────────────────────────────────────────────────
-    _draw_page("Other Elements",
-               _panel_items(all_pids, {"Other"}, "plan"))
-
-    # ── 4 ELEVATIONS — staged occlusion: walls → roofs → trusses ────────────
+    # ── 4 ELEVATIONS — clean bbox rectangles, staged occlusion ───────────────
     wall_pids  = {pid for pid, p in panels.items() if p["bucket"] == "Walls"}
     roof_pids  = {pid for pid, p in panels.items() if p["bucket"] == "Roofs"}
     truss_pids = {pid for pid, p in panels.items() if p["bucket"] == "Trusses"}
-    ext_pids   = {pid for pid in wall_pids
-                  if panels[pid]["name"].upper().startswith("EW")}
-    elev_wall_cands = ext_pids or wall_pids
+    floor_pids = {pid for pid, p in panels.items() if p["bucket"] == "Floors"}
 
-    for direction, view, label in [
-        ("N", "north", "North Elevation"),
-        ("S", "south", "South Elevation"),
-        ("E", "east",  "East Elevation"),
-        ("W", "west",  "West Elevation"),
+    # Painter's algorithm handles all occlusion — pass every panel for each elevation
+    all_pids = wall_pids | roof_pids | truss_pids | floor_pids
+
+    for direction, label in [
+        ("north", "North Elevation"),
+        ("south", "South Elevation"),
+        ("east",  "East Elevation"),
+        ("west",  "West Elevation"),
     ]:
-        vis_walls, vis_roofs, vis_trusses = _elevation_pids(
-            elev_wall_cands, roof_pids, truss_pids, direction
+        _draw_elevation_page(
+            label,
+            _elevation_bbox_items(all_pids, {"Walls", "Roofs", "Trusses", "Floors"}, direction)
         )
-        elev_all = vis_walls | vis_roofs | vis_trusses
-        _draw_page(label,
-                   _panel_items(elev_all, {"Walls", "Roofs", "Trusses"}, view),
-                   show_heights=True)
 
     canv.save()
     return buf.getvalue()
