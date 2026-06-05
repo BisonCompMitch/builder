@@ -424,17 +424,24 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                     canv.drawCentredString(0, 1, dim_txt)
                     canv.restoreState()
 
-            # Label (RED bold) to the right of the panel
+            # Label (RED bold) to the right of the panel — clamped + halo
             if item["name"]:
+                fs = 5.5
+                label_text = item["name"][:20]
                 lx = px0 + pw + 4
                 ly = py0 + ph / 2
-                fs = 5.5
+                tw = canv.stringWidth(label_text, "Helvetica-Bold", fs)
+                right_limit = DRAW_X + DRAW_W - 4
+                lx = min(lx, right_limit - tw)
                 canv.setLineWidth(0.3)
                 canv.setStrokeColorRGB(0.55, 0.55, 0.55)
                 canv.line(px0 + pw, ly, lx - 1, ly)
+                hp = 1.5
+                canv.setFillColor(_rl_colors.white)
+                canv.rect(lx - hp, ly - fs * 0.82, tw + hp * 2, fs + hp, fill=1, stroke=0)
                 canv.setFont("Helvetica-Bold", fs)
                 canv.setFillColorRGB(0.80, 0.02, 0.02)
-                canv.drawString(lx, ly - fs * 0.36, item["name"][:20])
+                canv.drawString(lx, ly - fs * 0.36, label_text)
 
         mm_per_pt = 25.4 / 72
         ratio     = 1000 / (scale * mm_per_pt)
@@ -582,15 +589,21 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             shift = placed_y[-1] - lbl_top
             placed_y = [max(lbl_bot, y - shift) for y in placed_y]
         for (px_max, ly_ideal, name, r, g, b), ly in zip(pending_labels, placed_y):
-            lx = px_max + 4
+            label_text = name[:20]
+            tw = canv.stringWidth(label_text, "Helvetica", FS)
+            right_limit = DRAW_X + DRAW_W - 4
+            lx = min(px_max + 4, right_limit - tw)
             canv.setLineWidth(0.3)
             canv.setStrokeColorRGB(0.55, 0.55, 0.55)
             canv.line(px_max, ly_ideal, lx - 1, ly_ideal)
             if abs(ly - ly_ideal) > 1:
                 canv.line(lx - 1, ly_ideal, lx - 1, ly)
+            hp = 1.5
+            canv.setFillColor(_rl_colors.white)
+            canv.rect(lx - hp, ly - FS * 0.82, tw + hp * 2, FS + hp, fill=1, stroke=0)
             canv.setFont("Helvetica", FS)
             canv.setFillColorRGB(0.05, 0.05, 0.05)
-            canv.drawString(lx, ly - FS * 0.36, name[:20])
+            canv.drawString(lx, ly - FS * 0.36, label_text)
 
         # ── height scale (ft/in) on the left for elevation views ─────────────
         if show_heights:
@@ -827,16 +840,35 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             ph = (z1 - z0) * scale
             if pw < 0.3 or ph < 0.3:
                 continue
-            # White backing covers anything drawn behind this panel
+            # White backing plate — covers everything drawn behind this panel
             canv.setFillColor(_rl_colors.white)
             canv.setStrokeColor(_rl_colors.white)
             canv.rect(px, pz, pw, ph, fill=1, stroke=0)
-            # Colored panel on top
+            # Per-entity structural members drawn on top of the white plate
             r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
-            canv.setFillColorRGB(r * 0.08 + 0.92, g * 0.08 + 0.92, b * 0.08 + 0.92)
-            canv.setStrokeColorRGB(max(0, r * 0.7), max(0, g * 0.7), max(0, b * 0.7))
-            canv.setLineWidth(0.6)
-            canv.rect(px, pz, pw, ph, fill=1, stroke=1)
+            fill_r = r * 0.08 + 0.92
+            fill_g = g * 0.08 + 0.92
+            fill_b = b * 0.08 + 0.92
+            stroke_r = max(0.0, r * 0.7)
+            stroke_g = max(0.0, g * 0.7)
+            stroke_b = max(0.0, b * 0.7)
+            entity_bboxes = item.get("entity_bboxes", [])
+            if entity_bboxes:
+                for eh0, ez0, eh1, ez1 in entity_bboxes:
+                    epx2, epz2 = epdf(eh0, ez0)
+                    epw2 = (eh1 - eh0) * scale
+                    eph2 = (ez1 - ez0) * scale
+                    if epw2 < 0.25 or eph2 < 0.25:
+                        continue
+                    canv.setFillColorRGB(fill_r, fill_g, fill_b)
+                    canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
+                    canv.setLineWidth(0.5)
+                    canv.rect(epx2, epz2, epw2, eph2, fill=1, stroke=1)
+            else:
+                canv.setFillColorRGB(fill_r, fill_g, fill_b)
+                canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
+                canv.setLineWidth(0.6)
+                canv.rect(px, pz, pw, ph, fill=1, stroke=1)
             for oh0, oz0, oh1, oz1 in item.get("op_bboxes", []):
                 opx, opz = epdf(oh0, oz0)
                 opw = (oh1 - oh0) * scale
@@ -1097,14 +1129,20 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             if not p or p["bucket"] not in buckets:
                 continue
             hs, zs, ds = [], [], []
+            entity_bboxes = []
             for vf in p["entities"].values():
+                ehs, ezs = [], []
                 for i in range(0, len(vf) - 2, 3):
                     x, y, z = vf[i], vf[i + 1], vf[i + 2]
-                    if   direction == "north": hs.append(x);  ds.append(y)
-                    elif direction == "south": hs.append(-x); ds.append(y)
-                    elif direction == "east":  hs.append(-y); ds.append(x)
-                    else:                      hs.append(y);  ds.append(x)
-                    zs.append(z)
+                    if   direction == "north": h_val = x;  d_val = y
+                    elif direction == "south": h_val = -x; d_val = y
+                    elif direction == "east":  h_val = -y; d_val = x
+                    else:                      h_val = y;  d_val = x
+                    ehs.append(h_val); hs.append(h_val)
+                    ds.append(d_val)
+                    ezs.append(z);     zs.append(z)
+                if ehs:
+                    entity_bboxes.append((min(ehs), min(ezs), max(ehs), max(ezs)))
             if not hs:
                 continue
             sort_depth = (sum(ds) / len(ds)) * depth_sign
@@ -1121,11 +1159,12 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 if ohs:
                     op_bboxes.append((min(ohs), min(ozs), max(ohs), max(ozs)))
             result.append({
-                "name":       p["name"],
-                "bucket":     p["bucket"],
-                "bbox":       (min(hs), min(zs), max(hs), max(zs)),
-                "op_bboxes":  op_bboxes,
-                "sort_depth": sort_depth,
+                "name":          p["name"],
+                "bucket":        p["bucket"],
+                "bbox":          (min(hs), min(zs), max(hs), max(zs)),
+                "entity_bboxes": entity_bboxes,
+                "op_bboxes":     op_bboxes,
+                "sort_depth":    sort_depth,
             })
         return result
 
@@ -1229,7 +1268,7 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
 
         return vis_walls, vis_roofs, vis_trusses, vis_floors
 
-    # ── WALL PLANS + TRUSS PLANS — separate pages per storey ─────────────────
+    # ── WALL PLANS + TRUSS PLANS + FLOOR TRUSS PLANS — separate pages per storey ─
     for _sort_key, sname, pids in final_storeys:
         wall_its = _wall_plan_items(pids, {"Walls"})
         if wall_its:
@@ -1237,6 +1276,9 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         truss_its = _panel_items(pids, {"Trusses"}, "plan")
         if truss_its:
             _draw_page(f"Truss Plan  {sname}", truss_its)
+        floor_its = _panel_items(pids, {"Floors"}, "plan")
+        if floor_its:
+            _draw_page(f"Floor Truss Plan  {sname}", floor_its)
 
     # ── 4 ELEVATIONS — clean bbox rectangles, staged occlusion ───────────────
     wall_pids  = {pid for pid, p in panels.items() if p["bucket"] == "Walls"}
