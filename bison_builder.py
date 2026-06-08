@@ -838,37 +838,31 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             px, pz = epdf(h0, z0)
             pw = (h1 - h0) * scale
             ph = (z1 - z0) * scale
-            if pw < 0.3 or ph < 0.3:
+            if pw < 0.3:
                 continue
-            # White backing plate — covers everything drawn behind this panel
-            canv.setFillColor(_rl_colors.white)
-            canv.setStrokeColor(_rl_colors.white)
-            canv.rect(px, pz, pw, ph, fill=1, stroke=0)
-            # Per-entity structural members drawn on top of the white plate
+            ph = max(ph, 1.5)  # floors project near-zero z-extent; ensure minimum visible height
+            # Per-entity structural members
             r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
-            fill_r = r * 0.08 + 0.92
-            fill_g = g * 0.08 + 0.92
-            fill_b = b * 0.08 + 0.92
             stroke_r = max(0.0, r * 0.7)
             stroke_g = max(0.0, g * 0.7)
             stroke_b = max(0.0, b * 0.7)
             entity_bboxes = item.get("entity_bboxes", [])
+            drew_entity = False
             if entity_bboxes:
                 for eh0, ez0, eh1, ez1 in entity_bboxes:
                     epx2, epz2 = epdf(eh0, ez0)
                     epw2 = (eh1 - eh0) * scale
-                    eph2 = (ez1 - ez0) * scale
-                    if epw2 < 0.25 or eph2 < 0.25:
+                    eph2 = max((ez1 - ez0) * scale, 1.5)  # clamp floors to min height
+                    if epw2 < 0.25:
                         continue
-                    canv.setFillColorRGB(fill_r, fill_g, fill_b)
                     canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
                     canv.setLineWidth(0.5)
-                    canv.rect(epx2, epz2, epw2, eph2, fill=1, stroke=1)
-            else:
-                canv.setFillColorRGB(fill_r, fill_g, fill_b)
+                    canv.rect(epx2, epz2, epw2, eph2, fill=0, stroke=1)
+                    drew_entity = True
+            if not drew_entity:
                 canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
                 canv.setLineWidth(0.6)
-                canv.rect(px, pz, pw, ph, fill=1, stroke=1)
+                canv.rect(px, pz, pw, ph, fill=0, stroke=1)
             for oh0, oz0, oh1, oz1 in item.get("op_bboxes", []):
                 opx, opz = epdf(oh0, oz0)
                 opw = (oh1 - oh0) * scale
