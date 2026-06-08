@@ -840,33 +840,58 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             ph = (z1 - z0) * scale
             if pw < 0.3:
                 continue
-            ph = max(ph, 1.5)  # floors project near-zero z-extent; ensure minimum visible height
-            # White backing plate — painter's algorithm depth ordering; openings punch through below
-            canv.setFillColor(_rl_colors.white)
-            canv.setStrokeColor(_rl_colors.white)
-            canv.rect(px, pz, pw, ph, fill=1, stroke=0)
-            # Per-entity structural members (stroke-only over white backing)
+            ph = max(ph, 1.5)
+
             r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
             stroke_r = max(0.0, r * 0.7)
             stroke_g = max(0.0, g * 0.7)
             stroke_b = max(0.0, b * 0.7)
-            entity_bboxes = item.get("entity_bboxes", [])
+
+            # ── White backing (exact panel hull polygon, or bbox for degenerate floors) ──
+            backing_pts = [epdf(h, z) for h, z in item.get("panel_hull", [])]
+            backing_ph  = (max(pt[1] for pt in backing_pts) -
+                           min(pt[1] for pt in backing_pts)) if backing_pts else 0
+            canv.setFillColor(_rl_colors.white)
+            if len(backing_pts) >= 3 and backing_ph >= 0.5:
+                path = canv.beginPath()
+                path.moveTo(*backing_pts[0])
+                for pt in backing_pts[1:]:
+                    path.lineTo(*pt)
+                path.close()
+                canv.drawPath(path, fill=1, stroke=0)
+            else:
+                canv.setStrokeColor(_rl_colors.white)
+                canv.rect(px, pz, pw, ph, fill=1, stroke=0)
+
+            # ── Per-entity structural outlines (exact hull polygon, stroke-only) ──
             drew_entity = False
-            if entity_bboxes:
-                for eh0, ez0, eh1, ez1 in entity_bboxes:
-                    epx2, epz2 = epdf(eh0, ez0)
-                    epw2 = (eh1 - eh0) * scale
-                    eph2 = max((ez1 - ez0) * scale, 1.5)  # clamp floors to min height
-                    if epw2 < 0.25:
-                        continue
-                    canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
-                    canv.setLineWidth(0.5)
-                    canv.rect(epx2, epz2, epw2, eph2, fill=0, stroke=1)
-                    drew_entity = True
+            for eh in item.get("entity_hulls", []):
+                eh_pdf  = [epdf(h, z) for h, z in eh]
+                eh_xs   = [pt[0] for pt in eh_pdf]
+                eh_zs   = [pt[1] for pt in eh_pdf]
+                eh_pw   = max(eh_xs) - min(eh_xs)
+                eh_ph   = max(eh_zs) - min(eh_zs)
+                if eh_pw < 0.25:
+                    continue
+                canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
+                canv.setLineWidth(0.5)
+                if len(eh) >= 3 and eh_ph >= 0.5:
+                    path = canv.beginPath()
+                    path.moveTo(*eh_pdf[0])
+                    for pt in eh_pdf[1:]:
+                        path.lineTo(*pt)
+                    path.close()
+                    canv.drawPath(path, fill=0, stroke=1)
+                else:
+                    canv.rect(min(eh_xs), min(eh_zs), eh_pw, max(eh_ph, 1.5),
+                              fill=0, stroke=1)
+                drew_entity = True
             if not drew_entity:
                 canv.setStrokeColorRGB(stroke_r, stroke_g, stroke_b)
                 canv.setLineWidth(0.6)
                 canv.rect(px, pz, pw, ph, fill=0, stroke=1)
+
+            # ── Opening cutouts ──
             for oh0, oz0, oh1, oz1 in item.get("op_bboxes", []):
                 opx, opz = epdf(oh0, oz0)
                 opw = (oh1 - oh0) * scale
@@ -877,24 +902,22 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                     canv.setLineWidth(0.3)
                     canv.rect(opx, opz, opw, oph, fill=1, stroke=1)
 
-        # Panel name labels — second pass so text sits on top of all geometry
-        for item in elev_items:
-            h0, z0, h1, z1 = item["bbox"]
-            px, pz = epdf(h0, z0)
-            pw = (h1 - h0) * scale
-            ph = max((z1 - z0) * scale, 1.5)
-            if pw < 6.0:
-                continue
+            # ── Panel label with white chip (painter's order — covered by front panels naturally) ──
             lbl = item.get("name", "")
-            if not lbl:
-                continue
-            r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
-            font_size = min(5.5, max(3.5, pw * 0.12))
-            lx = px + pw / 2
-            lz = pz + ph / 2 - font_size * 0.35  # vertically centred in panel
-            canv.setFont("Helvetica", font_size)
-            canv.setFillColorRGB(max(0.0, r * 0.55), max(0.0, g * 0.55), max(0.0, b * 0.55))
-            canv.drawCentredString(lx, lz, lbl)
+            if lbl and pw >= 6.0:
+                font_size = min(5.5, max(3.5, pw * 0.12))
+                lx = px + pw / 2
+                lz = pz + ph - font_size - 1.5  # near top of panel
+                text_w = len(lbl) * font_size * 0.55  # Helvetica average char width
+                chip_pad = 1.2
+                canv.setFillColor(_rl_colors.white)
+                canv.setStrokeColor(_rl_colors.white)
+                canv.rect(lx - text_w / 2 - chip_pad, lz - 1.0,
+                          text_w + 2 * chip_pad, font_size + 1.5, fill=1, stroke=0)
+                canv.setFont("Helvetica", font_size)
+                canv.setFillColorRGB(max(0.0, r * 0.55), max(0.0, g * 0.55),
+                                     max(0.0, b * 0.55))
+                canv.drawCentredString(lx, lz, lbl)
 
         # Height scale (left side)
         scx = DRAW_X + HT_W - 4
@@ -1137,33 +1160,32 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
         return result
 
     def _elevation_bbox_items(pid_set: set, buckets: set, direction: str) -> list:
-        """Per-panel bounding boxes + painter-sort depth for back-to-front rendering."""
-        # sign: lower sort_depth = farther from camera = drawn first
+        """Per-panel exact geometry (convex hulls) + painter-sort depth."""
         depth_sign = -1.0 if direction in ("south", "west") else 1.0
         result = []
         for pid in pid_set:
             p = panels.get(pid)
             if not p or p["bucket"] not in buckets:
                 continue
-            hs, zs, ds = [], [], []
-            entity_bboxes = []
+            all_hz: list = []
+            ds:     list = []
+            entity_hulls: list = []
             for vf in p["entities"].values():
-                ehs, ezs = [], []
+                hz_pts = _project(vf, direction)  # (h, z) elevation coords
+                all_hz.extend(hz_pts)
+                eh = _hull(hz_pts)
+                if len(eh) >= 2:
+                    entity_hulls.append(eh)
                 for i in range(0, len(vf) - 2, 3):
-                    x, y, z = vf[i], vf[i + 1], vf[i + 2]
-                    if   direction == "north": h_val = x;  d_val = y
-                    elif direction == "south": h_val = -x; d_val = y
-                    elif direction == "east":  h_val = -y; d_val = x
-                    else:                      h_val = y;  d_val = x
-                    ehs.append(h_val); hs.append(h_val)
-                    ds.append(d_val)
-                    ezs.append(z);     zs.append(z)
-                if ehs:
-                    entity_bboxes.append((min(ehs), min(ezs), max(ehs), max(ezs)))
-            if not hs:
+                    x, y = vf[i], vf[i + 1]
+                    ds.append(y if direction in ("north", "south") else x)
+            if not all_hz:
                 continue
-            sort_depth = (sum(ds) / len(ds)) * depth_sign
-            op_bboxes = []
+            hs = [h for h, z in all_hz]
+            zs = [z for h, z in all_hz]
+            panel_hull  = _hull(all_hz)
+            sort_depth  = (sum(ds) / len(ds)) * depth_sign
+            op_bboxes   = []
             for ov in panel_opening_verts.get(pid, []):
                 ohs, ozs = [], []
                 for i in range(0, len(ov) - 2, 3):
@@ -1179,7 +1201,8 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                 "name":          p["name"],
                 "bucket":        p["bucket"],
                 "bbox":          (min(hs), min(zs), max(hs), max(zs)),
-                "entity_bboxes": entity_bboxes,
+                "panel_hull":    panel_hull,
+                "entity_hulls":  entity_hulls,
                 "op_bboxes":     op_bboxes,
                 "sort_depth":    sort_depth,
             })
