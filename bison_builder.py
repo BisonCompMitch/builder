@@ -841,7 +841,11 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
             if pw < 0.3:
                 continue
             ph = max(ph, 1.5)  # floors project near-zero z-extent; ensure minimum visible height
-            # Per-entity structural members
+            # White backing plate — painter's algorithm depth ordering; openings punch through below
+            canv.setFillColor(_rl_colors.white)
+            canv.setStrokeColor(_rl_colors.white)
+            canv.rect(px, pz, pw, ph, fill=1, stroke=0)
+            # Per-entity structural members (stroke-only over white backing)
             r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
             stroke_r = max(0.0, r * 0.7)
             stroke_g = max(0.0, g * 0.7)
