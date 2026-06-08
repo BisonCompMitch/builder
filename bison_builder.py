@@ -877,6 +877,25 @@ def _generate_pdf(model: object, job_name: str) -> bytes:
                     canv.setLineWidth(0.3)
                     canv.rect(opx, opz, opw, oph, fill=1, stroke=1)
 
+        # Panel name labels — second pass so text sits on top of all geometry
+        for item in elev_items:
+            h0, z0, h1, z1 = item["bbox"]
+            px, pz = epdf(h0, z0)
+            pw = (h1 - h0) * scale
+            ph = max((z1 - z0) * scale, 1.5)
+            if pw < 6.0:
+                continue
+            lbl = item.get("name", "")
+            if not lbl:
+                continue
+            r, g, b = BUCKET_RGB.get(item["bucket"], (0, 0, 0))
+            font_size = min(5.5, max(3.5, pw * 0.12))
+            lx = px + pw / 2
+            lz = pz + ph / 2 - font_size * 0.35  # vertically centred in panel
+            canv.setFont("Helvetica", font_size)
+            canv.setFillColorRGB(max(0.0, r * 0.55), max(0.0, g * 0.55), max(0.0, b * 0.55))
+            canv.drawCentredString(lx, lz, lbl)
+
         # Height scale (left side)
         scx = DRAW_X + HT_W - 4
         py_bot = oy
