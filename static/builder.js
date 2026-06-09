@@ -239,6 +239,16 @@ function setStatus(message, isError = false) {
   if (isError) statusCard.classList.remove("hidden");
 }
 
+function resetLoadedProjectModel(message = "Select a project to load its Builder model.") {
+  clearModel();
+  loadedAssignedProjectId = null;
+  loadedUploadFile = null;
+  fileLabel.textContent = "No model loaded";
+  statsLabel.textContent = "";
+  setStatus(message);
+  statusCard.classList.remove("hidden");
+}
+
 function setViewerLoading(isLoading, message = "Loading project model") {
   if (!viewerLoadingOverlay) return;
   if (viewerLoadingTitle) viewerLoadingTitle.textContent = message;
@@ -601,7 +611,15 @@ function renderProjectContext(preferredProjectId = "") {
   if (projectNameLabel) projectNameLabel.classList.toggle("hidden", !capabilities.assignedOnly);
   projectSelect.classList.toggle("hidden", capabilities.assignedOnly);
   projectSelect.disabled = !capabilities.canUseProjectSelector;
+  const currentProjectId = projectSelect.value || loadedAssignedProjectId || "";
+  const requestedProjectId = String(preferredProjectId || currentProjectId || "").trim();
   projectSelect.innerHTML = "";
+  if (!capabilities.assignedOnly) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a project";
+    projectSelect.appendChild(placeholder);
+  }
   for (const project of projects) {
     const option = document.createElement("option");
     option.value = project.id;
@@ -609,19 +627,26 @@ function renderProjectContext(preferredProjectId = "") {
     projectSelect.appendChild(option);
   }
 
-  const selected =
-    projects.find((project) => project.id === preferredProjectId) ||
-    projects.find((project) => project.has_builder_model) ||
-    projects[0] ||
-    null;
+  let selected = projects.find((project) => project.id === requestedProjectId) || null;
+  if (!selected && capabilities.assignedOnly) {
+    selected =
+      projects.find((project) => project.has_builder_model) ||
+      projects[0] ||
+      null;
+  }
 
   if (!selected) {
+    projectSelect.value = "";
     if (projectNameLabel) projectNameLabel.textContent = "No project assigned.";
-    assignedModelLabel.textContent = capabilities.canAssign
-      ? "Select a project to assign a Builder model."
-      : "No Builder model assigned yet.";
+    assignedModelLabel.textContent = capabilities.canUseProjectSelector
+      ? "Select a project to view its Builder model."
+      : capabilities.canAssign
+        ? "Select a project to assign a Builder model."
+        : "No Builder model assigned yet.";
     if (showUploadCard) {
-      setStatus("Drop or choose an IFC file to load a model.");
+      setStatus("Select a project or drop an IFC file to load a model.");
+    } else if (capabilities.canUseProjectSelector) {
+      setStatus("Select a project to load its Builder model.");
     } else {
       setStatus("No Builder model is assigned to this account.", true);
     }
@@ -642,7 +667,9 @@ async function loadBuilderContext(preferredProjectId = "") {
     renderProjectContext(preferredProjectId);
     const capabilities = getEffectiveCapabilities();
     const selected = getSelectedProject();
-    if (selected?.has_builder_model) {
+    const hasPreferredProject = Boolean(String(preferredProjectId || "").trim());
+    const shouldLoadSelectedProject = capabilities.assignedOnly || hasPreferredProject;
+    if (selected?.has_builder_model && shouldLoadSelectedProject) {
       await loadAssignedProjectModel(selected.id);
     } else if (selected?.id && loadedAssignedProjectId === selected.id) {
       clearModel();
@@ -650,11 +677,19 @@ async function loadBuilderContext(preferredProjectId = "") {
       fileLabel.textContent = "No model assigned";
       statsLabel.textContent = "";
       setStatus("No Builder model is assigned to this project.", true);
-    } else if (capabilities.assignedOnly || !capabilities.canUpload) {
+    } else if (capabilities.assignedOnly || (!capabilities.canUpload && !capabilities.canUseProjectSelector)) {
       clearModel();
       fileLabel.textContent = "No model assigned";
       statsLabel.textContent = "";
       setStatus("No Builder model has been assigned yet.", true);
+    } else if (!selected && !modelGroup && !loadedUploadFile) {
+      fileLabel.textContent = "No model loaded";
+      statsLabel.textContent = "";
+      setStatus(
+        capabilities.canUseProjectSelector
+          ? "Select a project to load its Builder model."
+          : "Drop or choose an IFC file to load a model."
+      );
     }
   } catch (error) {
     console.error(error);
@@ -896,11 +931,17 @@ async function exportPdf() {
 loadBtn.addEventListener("click", loadModel);
 exportBtn.addEventListener("click", exportPdf);
 projectSelect?.addEventListener("change", () => {
+  const projectId = projectSelect.value;
   if (!getEffectiveCapabilities().canUseProjectSelector) {
-    renderProjectContext(projectSelect.value);
+    renderProjectContext(projectId);
     return;
   }
-  loadAssignedProjectModel(projectSelect.value);
+  renderProjectContext(projectId);
+  if (!projectId) {
+    resetLoadedProjectModel("Select a project to load its Builder model.");
+    return;
+  }
+  loadAssignedProjectModel(projectId);
 });
 assignedFileInput?.addEventListener("change", uploadAssignedModel);
 assignedUploadBtn?.addEventListener("click", chooseAssignedModelFile);
